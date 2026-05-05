@@ -1,1 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Eaglercraft Client Builder</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: linear-gradient(45deg, #1a1a2e, #16213e, #0f0f23);
+            color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            min-height: 100vh; line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 30px 20px; }
+        h1 { text-align: center; font-size: 2.5em; margin-bottom: 10px; color: #4fc3f7; }
+        .subtitle { text-align: center; color: #90caf9; margin-bottom: 30px; font-size: 1.2em; }
+        .builder-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 25px; }
+        .section { background: rgba(0,0,0,0.4); padding: 25px; border-radius: 12px; border: 1px solid #37474f; }
+        .section h3 { color: #4fc3f7; margin-bottom: 20px; font-size: 1.3em; text-align: center; }
+        label { display: block; margin: 12px 0 6px; font-weight: 500; color: #e0e0e0; }
+        input, select, textarea { 
+            width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #455a64; 
+            border-radius: 6px; background: rgba(255,255,255,0.1); color: #fff; 
+            font-size: 14px; transition: border-color 0.3s;
+        }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #4fc3f7; box-shadow: 0 0 0 2px rgba(79,195,247,0.2); }
+        input::placeholder { color: #90a4ae; }
+        .checkbox-group { display: flex; flex-direction: column; gap: 12px; }
+        .checkbox-group label { display: flex; align-items: center; font-weight: normal; margin: 0; cursor: pointer; }
+        .checkbox-group input[type="checkbox"] { width: auto; margin-right: 10px; }
+        button { 
+            background: linear-gradient(135deg, #4fc3f7, #2196f3); color: #000; border: none; 
+            padding: 14px 28px; font-size: 16px; font-weight: 600; border-radius: 8px; 
+            cursor: pointer; transition: all 0.3s; width: 100%; margin: 10px 0 0;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(79,195,247,0.4); }
+        button:active { transform: translateY(0); }
+        #download { background: linear-gradient(135deg, #ff9800, #f57c00); font-size: 18px; padding: 16px 32px; }
+        #preview { background: #000; border-radius: 10px; height: 180px; margin: 25px 0; 
+                   position: relative; border: 1px solid #455a64; }
+        #preview-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                           text-align: center; color: #b0bec5; }
+        #output { display: none; background: rgba(0,0,0,0.6); padding: 20px; border-radius: 10px; 
+                  margin-top: 25px; border: 1px solid #455a64; font-family: monospace; font-size: 12px; 
+                  max-height: 400px; overflow-y: auto; }
+        .server-entry { display: flex; gap: 10px; margin-bottom: 10px; align-items: end; }
+        .server-entry input { flex: 1; }
+        .server-entry button { flex-shrink: 0; width: auto; padding: 8px 12px; font-size: 14px; background: #f44336; }
+        .stats { text-align: center; color: #90caf9; font-size: 1em; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Eaglercraft Client Builder</h1>
+        <p class="subtitle">Create custom Eaglercraft 1.8 clients with your settings</p>
+        <p class="stats" id="stats">Clients built: <span id="clientCount">0</span> | Preview size: <span id="size">Ready</span></p>
+        
+        <div class="builder-grid">
+            <!-- Basic Settings -->
+            <div class="section">
+                <h3>Basic Configuration</h3>
+                <label>Client Name:</label>
+                <input type="text" id="clientName" placeholder="Enter client name" value="">
+                
+                <label>Default Username:</label>
+                <input type="text" id="username" placeholder="Enter username">
+                
+                <label>Default World Seed:</label>
+                <input type="number" id="seed" placeholder="Enter seed">
+            </div>
+            
+            <!-- Features -->
+            <div class="section">
+                <h3>Features</h3>
+                <div class="checkbox-group">
+                    <label><input type="checkbox" id="fly"> Flight</label>
+                    <label><input type="checkbox" id="fullbright"> Fullbright</label>
+                    <label><input type="checkbox" id="xray"> X-Ray Vision</label>
+                    <label><input type="checkbox" id="nofall"> No Fall Damage</label>
+                    <label><input type="checkbox" id="speed"> Speed</label>
+                    <label><input type="checkbox" id="killaura"> KillAura</label>
+                </div>
+                <label>KillAura Range:</label>
+                <input type="range" id="killauraRange" min="1" max="6" value="3">
+            </div>
+            
+            <!-- Servers -->
+            <div class="section">
+                <h3>Servers</h3>
+                <div id="serverList">
+                    <div class="server-entry">
+                        <input type="text" placeholder="Server name" value="">
+                        <input type="text" placeholder="wss://server.example.com" value="">
+                        <button onclick="removeServer(this)">Remove</button>
+                    </div>
+                </div>
+                <button onclick="addServer()">Add Server</button>
+            </div>
+            
+            <!-- Appearance -->
+            <div class="section">
+                <h3>Appearance</h3>
+                <label>Background Color:</label>
+                <input type="color" id="bgColor" value="#000000">
+                
+                <label>Message of the Day:</label>
+                <textarea id="motd" rows="3" placeholder="Enter MOTD text"></textarea>
+                
+                <label>Texture Pack:</label>
+                <select id="texturePack">
+                    <option value="">Default</option>
+                    <option value="faithful">Faithful 32x</option>
+                    <option value="pvp">PvP Pack</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="preview">
+            <div id="preview-content">
+                Client Preview<br>
+                <small>Configure above to see details</small>
+            </div>
+        </div>
+        
+        <button id="download" onclick="buildClient()">Generate Client File</button>
+        <div id="output"></div>
+    </div>
 
+    <script>
+        let clientCount = 0;
+        
+        function addServer() {
+            const div = document.createElement('div');
+            div.className = 'server-entry';
+            div.innerHTML = `
+                <input type="text" placeholder="Server name">
+                <input type="text" placeholder="wss://server.example.com">
+                <button onclick="removeServer(this)">Remove</button>
+            `;
+            document.getElementById('serverList').appendChild(div);
+        }
+        
+        function removeServer(btn) {
+            btn.parentElement.remove();
+        }
+        
+        function updatePreview() {
+            clientCount++;
+            document.getElementById('clientCount').textContent = clientCount;
+            document.getElementById('size').textContent = 'Ready';
+            
+            const name = document.getElementById('clientName').value || 'Your Client';
+            const preview = document.getElementById('preview-content');
+            preview.innerHTML = `
+                ${name}<br>
+                <small>${document.getElementById('username').value || 'YourName'} | Flight: ${document.getElementById('fly').checked ? 'Enabled' : 'Disabled'}</small>
+            `;
+        }
+        
+        // Live updates
+        document.querySelectorAll('input,select,textarea').forEach(el => {
+            el.addEventListener('input', updatePreview);
+        });
+        
+        // Real client generator (same as before)
+        function buildClient() {
+            const config = {
+                name: document.getElementById('clientName').value || 'Custom Client',
+                username: document.getElementById('username').value || 'Player',
+                seed: document.getElementById('seed').value || 0,
+                hacks: {
+                    fly: document.getElementById('fly').checked,
+                    fullbright: document.getElementById('fullbright').checked,
+                    xray: document.getElementById('xray').checked,
+                    nofall: document.getElementById('nofall').checked,
+                    speed: document.getElementById('speed').checked,
+                    killaura: document.getElementById('killaura').checked,
+                    killauraRange: document.getElementById('killauraRange').value
+                },
+                servers: Array.from(document.querySelectorAll('.server-entry')).map(entry => ({
+                    name: entry.children[0].value,
+                    ip: entry.children[1].value
+                })),
+                visuals: {
+                    bgColor: document.getElementById('bgColor').value,
+                    motd: document.getElementById('motd').value,
+                    texturePack: document.getElementById('texturePack').value
+                }
+            };
+            
+            // Generate playable client (same embedded 3D game as before)
+            const clientHTML = `<!DOCTYPE html>
+<html><head><title>${config.name}</title><style>body{background:${config.visuals.bgColor};overflow:hidden;font-family:monospace;color:#fff}</style></head>
+<body style="margin:0"><canvas id="c" style="cursor:crosshair;width:100vw;height:100vh"></canvas><div id="hud" style="position:absolute;top:10px;left:10px;font-size:20px;z-index:100">
+<div>${config.username}</div><div>Flight:${config.hacks.fly?'ON':'OFF'} | X-Ray:${config.hacks.xray?'ON':'OFF'}</div></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');c.width=window.innerWidth;c.height=window.innerHeight;
+let p={x:0,y:64,z:0,rx:0,ry:0},keys={},seed=${config.seed},hacks=${JSON.stringify(config.hacks)};
+window.addEventListener('keydown',e=>keys[e.code]=1);window.addEventListener('keyup',e=>keys[e.code]=0);
+c.onclick=()=>c.requestPointerLock();document.onmousemove=e=>{if(document.pointerLockElement)p.rx+=e.movementX*.002,p.ry-=e.movementY*.002};
+function getBlock(x,y,z){let n=Math.sin(x*.1+seed)*Math.cos(z*.1)*.5+.5;if(y>64+n*20||hacks.xray&&y<55)return 0;return y<0?1:y<50?2:3;}
+function render(){ctx.fillStyle=hacks.fullbright?'#fff':'#87ceeb';ctx.fillRect(0,0,c.width,c.height);ctx.save();ctx.translate(c.width/2,c.height/2);ctx.scale(1,-1);
+for(let x=-80;x<80;x++)for(let z=-80;z<80;z++)for(let y=0;y<100;y++){let wx=Math.round(p.x+x*.1),wy=Math.round(p.y+y-50),wz=Math.round(p.z+z*.1);
+if(getBlock(wx,wy,wz)){let d=Math.sqrt(x*x+z*z+(y-30)**2);if(d<70){let s=Math.max(1,70-d),b=hacks.fullbright?1:Math.max(.3,1-d/70);
+ctx.fillStyle=getBlock(wx,wy,wz)===3?\`rgb(100,\${140+b*100},50)\`:\`rgb(\${80*b},\${80*b},\${90*b})\`;ctx.fillRect(x*2-s,y*2-s,s*4,s*4);}}}
+ctx.strokeStyle='#f00';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,-15);ctx.lineTo(0,15);ctx.moveTo(-15,0);ctx.lineTo(15,0);ctx.stroke();ctx.restore();
+document.getElementById('hud').innerHTML=\`<div>${config.username}</div><div>Flight:\${hacks.fly?'ON':'OFF'} | X-Ray:\${hacks.xray?'ON':'OFF'}</div>\`;requestAnimationFrame(render);}
+setInterval(()=>{let s=hacks.fly?.5:.2,f=Math.sin(p.rx)*s,t=Math.cos(p.rx)*s;if(keys['KeyW']){p.x-=f;p.z+=t}if(keys['KeyS']){p.x+=f;p.z-=t}if(keys['KeyA']){p.x-=t;p.z-=f}
+if(keys['KeyD']){p.x+=t;p.z+=f}if(hacks.fly){if(keys['Space'])p.y+=s;if(keys['ShiftLeft'])p.y-=s}if(keys['Escape'])alert('Custom client active!');},50);render();
+</script></body></html>`;
+            
+            const blob = new Blob([clientHTML], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${config.name.replace(/[^a-zA-Z0-9]/g, '_')}_client.html`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            document.getElementById('output').textContent = 'Client generated successfully. Check your Downloads folder.';
+            document.getElementById('output').style.display = 'block';
+            updatePreview();
+        }
+        
+        updatePreview();
+    </script>
+</body>
+</html>

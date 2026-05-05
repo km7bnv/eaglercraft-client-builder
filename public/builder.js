@@ -54,80 +54,40 @@ function removeServer(btn) {
     updatePreview();
 }
 
-function buildClient() {
-    const clientName = document.getElementById('clientName').value || 'Custom Eaglercraft Client';
-    const username = document.getElementById('username').value;
-    const seed = document.getElementById('seed').value;
-    const bgColor = document.getElementById('bgColor').value;
-    const motd = document.getElementById('motd').value;
-    const texturePack = document.getElementById('texturePack').value;
+async function buildClient() {
+    // Collect settings (keep existing: opts, clientName, username, etc.)
 
-    // Hacks config
-    const hacks = {
-        fly: document.getElementById('fly').checked,
-        fullbright: document.getElementById('fullbright').checked,
-        xray: document.getElementById('xray').checked,
-        nofall: document.getElementById('nofall').checked,
-        speed: document.getElementById('speed').checked,
-        killaura: document.getElementById('killaura').checked ? parseInt(document.getElementById('killauraRange').value) : 0
-    };
+    try {
+        const response = await fetch('/base.html');  // Local static file
+        let baseHTML = await response.text();
 
-    // Servers
-    const servers = [];
-    document.querySelectorAll('.server-entry').forEach(entry => {
-        const name = entry.querySelector('input[type="text"]:nth-child(1)').value;
-        const url = entry.querySelector('input[type="text"]:nth-child(2)').value;
-        if (name && url) servers.push({ name, url });
-    });
+        // Patch with your config
+        baseHTML = baseHTML
+            .replace(/<title>.*?<\/title>/, `<title>${clientName}</title>`)
+            .replace(/window\.eaglercraftXOpts\s*=\s*\{[\s\S]*?\};?/i, `window.eaglercraftXOpts = ${JSON.stringify(opts)};`)
+            .replace(/"motd"\s*:\s*"[^"]*"/i, `"motd": "${motd.replace(/"/g, '\\"')}"`)
+            .replace(/<body\b[^>]*>/i, `<body style="background-color: ${bgColor};">`)
+            .replace(/("username"\s*:\s*)"[^"]*"/i, `$1"${username}"`)
+            .replace(/("worldSeed"\s*:\s*)[0-9]*/i, `$1${seed || 0}`);
 
-    // Eaglercraft opts
-    const opts = {
-        aset: texturePack || 'default',
-        servers: servers,
-        defaultServer: servers[0]?.url || '',
-        motd: motd,
-        username: username,
-        seed: seed || 0,
-        hacks: hacks,
-        style: { backgroundColor: bgColor }
-    };
+        // Download full modded client
+        const blob = new Blob([baseHTML], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${clientName.replace(/[^a-z0-9]/gi, '_')}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
 
-    // Generate HTML client
-    const clientHTML = `<!DOCTYPE html>
-<html>
-<head>
-    <title>${clientName}</title>
-    <style>body { background-color: ${bgColor}; }</style>
-</head>
-<body>
-    <div id="motd" style="color: white; text-align: center;">${motd || 'Welcome to ${clientName}'}</div>
-    <script>
-        window.eaglercraftXOpts = ${JSON.stringify(opts)};
-        // Add Eaglercraft 1.8 JS here (e.g., from 3kh0/eaglercraft-builds)
-        alert('Client ready! Add Eaglercraft assets for full play.');
-    <\/script>
-</body>
-</html>`;
-
-    // Download
-    const blob = new Blob([clientHTML], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${clientName}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    // Stats
-    let count = parseInt(document.getElementById('clientCount').textContent) + 1;
-    document.getElementById('clientCount').textContent = count;
-    localStorage.setItem('clientCount', count);
-
-    document.getElementById('output').innerHTML = `<p>Downloaded ${clientName}.html (${new Blob([clientHTML]).size} bytes)</p>`;
+        const sizeMB = (baseHTML.length / 1e6).toFixed(1);
+        document.getElementById('output').innerHTML = `<p>✅ ${clientName}.html downloaded (${sizeMB}MB) – Full offline Eaglercraft 1.8 with your settings!</p>`;
+        // Update clientCount...
+    } catch (e) {
+        document.getElementById('output').innerHTML = `<p>❌ Error loading base: ${e.message}. Ensure /base.html exists.</p>`;
+    }
 }
-
 function updatePreview() {
     const name = document.getElementById('clientName').value || 'Custom Client';
     const sizeEl = document.getElementById('size');

@@ -1,145 +1,88 @@
-// ======================================
-// STANDALONE builder.js - Drop-in ready
-// Save as /public/builder.js & <script src="/builder.js"></script>
-// Uses your /public/base.html - 100% modifies it
-// ======================================
+// builder.js - Perfect match for your index.html
+// Fetches /base.html → Mods copy → Downloads → Base stays pristine
 
-(function() {
-'use strict';
-
-// ===== INIT =====
-document.addEventListener('DOMContentLoaded', init);
-function init() {
-    updateStats();
-    bindEvents();
-    updatePreview();
-    window.buildClient = buildClient;  // Global
-}
-
-// Stats
-function updateStats() {
-    const el = document.getElementById('clientCount');
-    if (el) {
-        let count = parseInt(localStorage.getItem('clientCount') || '0');
-        el.textContent = count;
-    }
-}
-
-// Events
-function bindEvents() {
-    ['clientName','username','seed','fly','fullbright','xray','nofall','speed','killaura','killauraRange','bgColor','motd','texturePack','splashText']
-    .forEach(id => {
+document.addEventListener('DOMContentLoaded', function() {
+    // Live preview
+    ['clientName', 'username', 'seed', 'fly', 'fullbright', 'xray', 'nofall', 'speed', 'killaura', 'killauraRange', 
+     'bgColor', 'motd', 'texturePack'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', updatePreview);
     });
-    document.getElementById('addServer')?.addEventListener('click', addServer);
-}
+    
+    // Buttons
+    document.getElementById('download').textContent = 'Generate Client File';
+    updatePreview();
+    
+    // Global functions
+    window.addServer = addServer;
+    window.removeServer = removeServer;
+    window.buildClient = buildClient;
+});
 
-// Preview
 function updatePreview() {
-    const name = geid('clientName')?.value || 'Client';
-    const hacks = getHacks();
+    const name = document.getElementById('clientName').value || 'Custom Client';
+    const hacks = getEnabledHacks();
     const servers = document.querySelectorAll('.server-entry').length;
-    const el = document.getElementById('size');
-    if (el) el.textContent = `${name} | ${hacks.join(', ') || 'No hacks'} | ${servers} servers`;
-}
-
-// Utils
-function geid(id) { return document.getElementById(id); }
-function getHacks() {
-    return ['fly','fullbright','xray','nofall','speed','killaura']
-        .filter(id => geid(id)?.checked)
-        .map(id => id.toUpperCase());
-}
-
-// Servers
-function addServer() {
-    const list = geid('serverList');
-    if (!list) return;
-    const div = document.createElement('div');
-    div.className = 'server-entry p-2 mb-2 bg-gray-800 rounded';
-    div.innerHTML = `
-        <input placeholder="Name" class="p-1 mr-2 w-24">
-        <input placeholder="wss://..." class="p-1 mr-2 flex-1">
-        <button onclick="this.parentElement.remove();updatePreview()" class="bg-red-500 px-2 py-1 text-white rounded">X</button>
+    document.getElementById('preview-content').innerHTML = `
+        ${name}<br>
+        <small>${hacks.join(', ') || 'No hacks'} | ${servers} server${servers !== 1 ? 's' : ''}</small>
     `;
-    list.appendChild(div);
+}
+
+function getEnabledHacks() {
+    return ['fly', 'fullbright', 'xray', 'nofall', 'speed', 'killaura']
+        .filter(id => document.getElementById(id).checked)
+        .map(id => id.charAt(0).toUpperCase() + id.slice(1));
+}
+
+function addServer() {
+    const serverList = document.getElementById('serverList');
+    const entry = document.createElement('div');
+    entry.className = 'server-entry';
+    entry.innerHTML = `
+        <input type="text" placeholder="Server name">
+        <input type="text" placeholder="wss://server.example.com">
+        <button type="button" onclick="removeServer(this)">Remove</button>
+    `;
+    serverList.appendChild(entry);
     updatePreview();
 }
 
-// ===== BUILDER CORE =====
-async function buildClient() {
-    const out = geid('output');
-    if (!out) return alert('Missing #output');
-    out.innerHTML = '🔄 Building...';
-
-    try {
-        // Settings
-        const name = (geid('clientName')?.value || 'Client').replace(/[^a-z0-9_-]/gi, '_');
-        const opts = {
-            title: name,
-            username: geid('username')?.value || 'Player',
-            worldSeed: +geid('seed')?.value || 0,
-            wssServers: Array.from(document.querySelectorAll('.server-entry input'))
-                .reduce((acc, el, i) => {
-                    if (i%2===0 && acc.length) {
-                        const srv = acc.pop();
-                        if (srv.name && el.value) acc.push({...srv, url: el.value});
-                    } else if (el.value) {
-                        acc.push({name: el.value});
-                    }
-                    return acc;
-                }, []),
-            backgroundColor: geid('bgColor')?.value || '#000',
-            motd: geid('motd')?.value || `${name} Client`,
-            splash: geid('splashText')?.value || 'Custom Build',
-            assets: geid('texturePack')?.value || 'default',
-            cheats: {
-                fly: !!geid('fly')?.checked,
-                fullbright: !!geid('fullbright')?.checked,
-                xray: !!geid('xray')?.checked,
-                nofall: !!geid('nofall')?.checked,
-                speed: !!geid('speed')?.checked,
-                killaura: geid('killaura')?.checked ? {range: +geid('killauraRange')?.value || 4} : false
-            }
-        };
-
-        // Fetch base.html
-        const res = await fetch('/base.html');
-        if (!res.ok) throw new Error('No /public/base.html - download from eaglercraft.com');
-        let html = await res.text();
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-
-        // Inject
-        const script = doc.createElement('script');
-        script.textContent = `window.mc_opts=${JSON.stringify(opts)};console.log('✅ HACKS:',${JSON.stringify(opts.cheats)});`;
-        doc.head.appendChild(script);
-
-        // Patch
-        doc.title = opts.title + ' - ' + opts.splash;
-        doc.body.style.backgroundColor = opts.backgroundColor;
-
-        html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
-
-        // Download
-        const blob = new Blob([html], {type:'text/html'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = name + '.html';
-        a.click();
-
-        // Update
-        const hacks = getHacks();
-        out.innerHTML = `✅ **${name}.html** BUILT!\n\nHacks: ${hacks.join(', ') || 'none'}\nServers: ${opts.wssServers.length}\nSplash: ${opts.splash}`;
-        
-        const count = parseInt(localStorage.getItem('clientCount') || '0') + 1;
-        localStorage.setItem('clientCount', count);
-        geid('clientCount').textContent = count;
-
-    } catch(e) {
-        out.innerHTML = '❌ ' + e.message;
-        console.error(e);
-    }
+function removeServer(button) {
+    button.parentElement.remove();
+    updatePreview();
 }
 
-})();
+// 🔥 MAIN BUILD FUNCTION
+async function buildClient() {
+    const output = document.getElementById('output');
+    const downloadBtn = document.getElementById('download');
+    
+    output.innerHTML = '<div style="color: #ffa500;">🔄 Building custom client...</div>';
+    downloadBtn.disabled = true;
+    downloadBtn.textContent = 'Building...';
+
+    try {
+        // Collect ALL settings
+        const clientName = (document.getElementById('clientName').value || 'Eaglercraft').replace(/[^a-zA-Z0-9_-]/g, '');
+        const username = document.getElementById('username').value || 'Player';
+        const seed = parseInt(document.getElementById('seed').value) || 12345;
+        const bgColor = document.getElementById('bgColor').value;
+        const motd = document.getElementById('motd').value || `${clientName} Client`;
+        const texturePack = document.getElementById('texturePack').value || '';
+        const killauraRange = parseInt(document.getElementById('killauraRange').value) || 3;
+
+        const hacks = {
+            fly: document.getElementById('fly').checked,
+            fullbright: document.getElementById('fullbright').checked,
+            xray: document.getElementById('xray').checked,
+            nofall: document.getElementById('nofall').checked,
+            speed: document.getElementById('speed').checked,
+            killaura: document.getElementById('killaura').checked ? killauraRange : 0
+        };
+
+        const servers = Array.from(document.querySelectorAll('.server-entry')).map(entry => {
+            const inputs = entry.querySelectorAll('input');
+            const name = inputs[0]?.value.trim();
+            const url = inputs[1]?.value.trim();
+            

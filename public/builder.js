@@ -148,7 +148,10 @@ async function buildClient() {
     output.className = '';
     downloadBtn.disabled = true;
     downloadBtn.textContent = 'Building...';
-    output.innerHTML = '🔄 Initializing build process...';
+    
+    // Clear previous output
+    output.innerHTML = '🔄 Starting build process...';
+    console.log('--- BUILD STARTED ---');
 
     try {
         // 1. Collect Settings
@@ -182,13 +185,13 @@ async function buildClient() {
         let splashImageBase64 = null;
         const splashFileInput = document.getElementById('splashImage');
         if (splashFileInput && splashFileInput.files.length > 0) {
-            output.innerHTML += '\n🖼️ Processing local splash image...';
+            output.innerHTML += '\n🖼️ Processing image...';
             try {
                 splashImageBase64 = await fileToBase64(splashFileInput.files[0]);
-                output.innerHTML += '✅ Image embedded.';
+                console.log('Image loaded, size:', splashImageBase64.length);
             } catch (err) {
-                console.warn('Failed to load image:', err);
-                output.innerHTML += '\n⚠️ Warning: Could not load image, proceeding without it.';
+                console.error('Image load failed:', err);
+                output.innerHTML += '\n⚠️ Image failed, continuing without it.';
             }
         }
 
@@ -201,51 +204,50 @@ async function buildClient() {
             assets: texturePack,
             backgroundColor: bgColor,
             splash: splashText,
-            splashImage: splashImageBase64, // New field for embedded image
+            splashImage: splashImageBase64,
             cheatsEnabled: true,
             cheats: hacks
         };
 
         output.innerHTML += '\n✅ Settings collected.';
+        console.log('Config:', config);
 
-        // 3. Fetch base.html (READ ONLY)
-        // Try root first, then /public
+        // 3. Fetch base.html
+        // Try standard path first
         let baseUrl = '/base.html';
         let res = await fetch(baseUrl);
         
         if (!res.ok) {
+            console.warn(`First fetch failed (${res.status}). Trying /public/base.html...`);
             baseUrl = '/public/base.html';
             res = await fetch(baseUrl);
         }
 
         if (!res.ok) {
-            throw new Error(`Could not find base.html at ${baseUrl}. \nEnsure 'base.html' exists in your 'public' folder and you are running a local server.`);
+            const errorMsg = `❌ Failed to load base.html! Status: ${res.status}\nPath tried: ${baseUrl}\n\nCheck your Render 'public' folder structure.`;
+            output.innerHTML = errorMsg;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
         }
 
         let html = await res.text();
-        output.innerHTML += '\n✅ base.html loaded (Read-Only).';
+        console.log('base.html loaded successfully. Length:', html.length);
+        output.innerHTML += '\n✅ base.html loaded.';
 
         // 4. Parse and Inject
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
 
-        // Create the config script
         const script = doc.createElement('script');
         script.type = 'text/javascript';
         script.textContent = `
-            // Eaglercraft Config Injection
             window.eaglerConfig = ${JSON.stringify(config)};
-            console.log("🎮 ${clientName} Config Loaded:", window.eaglerConfig);
-            
-            // Force background color immediately
+            console.log("🎮 ${clientName} Config Loaded");
             document.addEventListener('DOMContentLoaded', () => {
-                setTimeout(() => {
-                    document.body.style.backgroundColor = '${bgColor}';
-                }, 100);
+                setTimeout(() => { document.body.style.backgroundColor = '${bgColor}'; }, 100);
             });
         `;
 
-        // Inject at the VERY TOP of head to ensure config is ready before game init
         if (doc.head) {
             doc.head.insertBefore(script, doc.head.firstChild);
         } else {
@@ -254,49 +256,52 @@ async function buildClient() {
             doc.documentElement.prepend(newHead);
         }
 
-        // Update Title
         doc.title = `${clientName} - ${splashText}`;
-
-        // Reconstruct HTML
         const finalHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+        console.log('Final HTML generated. Length:', finalHtml.length);
 
-        // 5. Download
+        // 5. Download (Reliable Method)
         const blob = new Blob([finalHtml], {type: 'text/html;charset=utf-8'});
         const url = URL.createObjectURL(blob);
+        
+        // Create a temporary link
         const a = document.createElement('a');
         a.href = url;
         a.download = `${clientName}_Eagler18.html`;
+        
+        // Append to body, click, remove
         document.body.appendChild(a);
         a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        
+        // IMPORTANT: Wait a bit before revoking to ensure download starts
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            console.log('Download triggered and cleanup done.');
+        }, 1000);
 
-        // 6. Success Message
+        // 6. Success
         output.className = 'success';
         const hacksList = getEnabledHacks().join(', ') || 'None';
-        const imgStatus = splashImageBase64 ? '✅ Custom Splash' : '❌ Default Splash';
-        
         output.innerHTML = `
             <strong>✅ Build Successful!</strong><br><br>
             📄 File: <code>${clientName}_Eagler18.html</code><br>
             🛠️ Size: ${(finalHtml.length / 1024).toFixed(0)} KB<br>
             ⚡ Hacks: ${hacksList}<br>
-            🌐 Servers: ${servers.length}<br>
-            🖼️ Splash: ${imgStatus}<br><br>
-            <em>Original base.html is UNTOUCHED.<br>
-            Open the downloaded file in a browser to test.</em>
+            🌐 Servers: ${servers.length}<br><br>
+            <em>Check your downloads folder.</em>
         `;
 
-        // Update Stats
+        // Stats
         const count = (parseInt(localStorage.getItem('clientCount') || 0) + 1);
         localStorage.setItem('clientCount', count);
         document.getElementById('clientCount').textContent = count;
         document.getElementById('stats').innerHTML = `Clients built: <strong>${count}</strong>`;
 
     } catch (e) {
-        console.error(e);
+        console.error('BUILD FAILED:', e);
         output.className = 'error';
-        output.innerHTML = `❌ <strong>Error:</strong> ${e.message}`;
+        output.innerHTML = `❌ <strong>Error:</strong> ${e.message}<br><br><small>Check Console (F12) for details.</small>`;
     } finally {
         downloadBtn.disabled = false;
         downloadBtn.textContent = '🚀 Generate & Download Client File';

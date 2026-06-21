@@ -21,7 +21,7 @@
                 <input type="text" id="username" value="Player" placeholder="Player">
                 
                 <label>World Seed:</label>
-                <input type="number" id="seed" value="-343522682" placeholder="Enter seed">
+                <input type="number" id="seed" value="" placeholder="Enter seed">
             </div>
             
             <!-- Hacks -->
@@ -101,6 +101,11 @@
             document.getElementById('rangeDisplay').textContent = this.value;
             updatePreview();
         });
+        
+        const downloadBtn = document.getElementById('download');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', buildClient);
+        }
         
         // Global functions
         window.addServer = addServer;

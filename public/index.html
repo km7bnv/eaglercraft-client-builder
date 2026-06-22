@@ -64,13 +64,18 @@
                 <label>Splash Text:</label>
                 <input type="text" id="splashText" value="Hacks Ready!" placeholder="Bottom screen text">
                 
-                <label>Texture Pack:</label>
+                <label>Texture Pack / Mods:</label>
                 <select id="texturePack">
                     <option value="">Default (Vanilla)</option>
                     <option value="faithful">Faithful 32x</option>
                     <option value="pvp">PvP Pack</option>
                     <option value="modern">Modern Textures</option>
                 </select>
+                <small>Choose a preset or upload a custom .epw pack below to actually apply textures/mods.</small>
+
+                <label>Custom EPW / Texture Pack File:</label>
+                <input type="file" id="texturePackFile" accept=".epw">
+                <small style="display:block; margin-top:5px; color:#aaa;">Upload a local .epw asset pack to embed a real texture pack or mod into the generated client.</small>
             </div>
         </div>
 
@@ -94,8 +99,13 @@
     // builder.js - Perfect for your styles.css
     document.addEventListener('DOMContentLoaded', function() {
         // Live preview
-        ['clientName','username','seed','fly','fullbright','xray','nofall','speed','killaura','killauraRange','bgColor','motd','splashText','texturePack']
-        .forEach(id => document.getElementById(id)?.addEventListener('input', updatePreview));
+        ['clientName','username','seed','fly','fullbright','xray','nofall','speed','killaura','killauraRange','bgColor','motd','splashText','texturePack','texturePackFile']
+        .forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const eventName = el.tagName === 'INPUT' && el.type === 'file' ? 'change' : 'input';
+            el.addEventListener(eventName, updatePreview);
+        });
         
         document.getElementById('killauraRange').addEventListener('input', function() {
             document.getElementById('rangeDisplay').textContent = this.value;
@@ -176,6 +186,7 @@
             const motd = document.getElementById('motd').value || 'Custom Client';
             const splashText = document.getElementById('splashText').value || 'Ready!';
             const texturePack = document.getElementById('texturePack').value;
+            const texturePackFile = document.getElementById('texturePackFile');
             const killauraRange = parseInt(document.getElementById('killauraRange').value) || 3;
 
             const hacks = {
@@ -195,6 +206,12 @@
                 };
             }).filter(s => s.name && s.url);
 
+            let assetsURI = null;
+            if (texturePackFile && texturePackFile.files.length > 0) {
+                output.innerHTML += '\n🧩 Embedding custom EPW file...';
+                assetsURI = await fileToBase64(texturePackFile.files[0]);
+            }
+
             const config = {
                 title: clientName,
                 motd: motd,
@@ -202,6 +219,7 @@
                 seed: seed,
                 servers: servers,
                 assets: texturePack,
+                assetsURI: assetsURI,
                 backgroundColor: bgColor,
                 splash: splashText,
                 cheatsEnabled: true,
@@ -219,10 +237,27 @@
 
             // Inject into COPY (original untouched)
             const script = doc.createElement('script');
-            script.textContent = `window.eaglerConfig=${JSON.stringify(config)};
-console.log("🎮 ${clientName} loaded:", window.eaglerConfig);
-setTimeout(()=>{document.body.style.background='${bgColor}';},100);`;
-            doc.head.appendChild(script);
+            script.type = 'text/javascript';
+
+            let clientScript = `window.eaglercraftXOpts = window.eaglercraftXOpts || {};
+window.eaglercraftXOpts.username = ${JSON.stringify(username)};
+window.eaglercraftXOpts.seed = ${JSON.stringify(seed)};
+window.eaglercraftXOpts.servers = ${JSON.stringify(servers)};
+window.eaglercraftXOpts.texturePackPreset = ${JSON.stringify(texturePack)};
+window.eaglercraftXOpts.backgroundColor = ${JSON.stringify(bgColor)};
+window.eaglercraftXOpts.splashText = ${JSON.stringify(splashText)};
+window.eaglercraftXOpts.cheatsEnabled = true;
+window.eaglercraftXOpts.cheats = ${JSON.stringify(hacks)};
+`;
+            if (assetsURI) {
+                clientScript += `window.eaglercraftXOpts.assetsURI = ${JSON.stringify(assetsURI)};\n`;
+            }
+            clientScript += `window.eaglercraftXOpts.title = ${JSON.stringify(clientName)};
+console.log("🎮 ${clientName} loaded:", window.eaglercraftXOpts);
+`;
+
+            script.textContent = clientScript;
+            doc.body.appendChild(script);
 
             doc.title = `${clientName} - ${splashText}`;
 

@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const previewIds = [
         'clientName', 'username', 'seed', 'fly', 'fullbright', 'xray', 
         'nofall', 'speed', 'killaura', 'killauraRange', 'bgColor', 
-        'motd', 'splashText', 'texturePack', 'splashImage'
+        'motd', 'splashText', 'texturePack', 'texturePackFile', 'splashImage'
     ];
 
     previewIds.forEach(id => {
@@ -162,6 +162,7 @@ async function buildClient() {
         const motd = document.getElementById('motd').value || 'Custom Client';
         const splashText = document.getElementById('splashText').value || 'Ready!';
         const texturePack = document.getElementById('texturePack').value;
+        const texturePackFile = document.getElementById('texturePackFile');
         const killauraRange = parseInt(document.getElementById('killauraRange').value) || 3;
 
         const hacks = {
@@ -180,6 +181,12 @@ async function buildClient() {
                 url: inputs[1].value.trim()
             };
         }).filter(s => s.name && s.url);
+
+        let assetsURI = null;
+        if (texturePackFile && texturePackFile.files.length > 0) {
+            output.innerHTML += '\n🧩 Embedding custom EPW file...';
+            assetsURI = await fileToBase64(texturePackFile.files[0]);
+        }
 
         // 2. Handle Local Splash Image
         let splashImageBase64 = null;
@@ -202,6 +209,7 @@ async function buildClient() {
             seed: seed,
             servers: servers,
             assets: texturePack,
+            assetsURI: assetsURI,
             backgroundColor: bgColor,
             splash: splashText,
             splashImage: splashImageBase64,
@@ -240,16 +248,28 @@ async function buildClient() {
 
         const script = doc.createElement('script');
         script.type = 'text/javascript';
-        script.textContent = `
-            window.eaglerConfig = ${JSON.stringify(config)};
-            console.log("🎮 ${clientName} Config Loaded");
-            document.addEventListener('DOMContentLoaded', () => {
-                setTimeout(() => { document.body.style.backgroundColor = '${bgColor}'; }, 100);
-            });
-        `;
+        let clientScript = `window.eaglercraftXOpts = window.eaglercraftXOpts || {};
+window.eaglercraftXOpts.username = ${JSON.stringify(username)};
+window.eaglercraftXOpts.seed = ${JSON.stringify(seed)};
+window.eaglercraftXOpts.servers = ${JSON.stringify(servers)};
+window.eaglercraftXOpts.texturePackPreset = ${JSON.stringify(texturePack)};
+window.eaglercraftXOpts.backgroundColor = ${JSON.stringify(bgColor)};
+window.eaglercraftXOpts.splashText = ${JSON.stringify(splashText)};
+window.eaglercraftXOpts.cheatsEnabled = true;
+window.eaglercraftXOpts.cheats = ${JSON.stringify(hacks)};
+`;
+        if (assetsURI) {
+            clientScript += `window.eaglercraftXOpts.assetsURI = ${JSON.stringify(assetsURI)};\n`;
+        }
+        clientScript += `window.eaglercraftXOpts.title = ${JSON.stringify(clientName)};
+console.log("🎮 ${clientName} Config Loaded");
+`;
+        script.textContent = clientScript;
 
-        if (doc.head) {
-            doc.head.insertBefore(script, doc.head.firstChild);
+        if (doc.body) {
+            doc.body.appendChild(script);
+        } else if (doc.head) {
+            doc.head.appendChild(script);
         } else {
             const newHead = doc.createElement('head');
             newHead.appendChild(script);
